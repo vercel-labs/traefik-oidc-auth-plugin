@@ -1,4 +1,4 @@
-package traefik_auth_plugin
+package traefik_oidc_auth_plugin
 
 import (
 	"context"
