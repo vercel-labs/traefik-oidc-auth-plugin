@@ -1,6 +1,6 @@
 displayName: Vercel OIDC Authentication
 type: middleware
-import: github.com/vercel-saleseng/traefik-auth-plugin
+import: github.com/vercel-saleseng/traefik-oidc-auth-plugin
 summary: Validates JWT tokens issued by Vercel OIDC for authenticating requests from apps running on Vercel
 testData:
   issuer: https://oidc.vercel.com

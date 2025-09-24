@@ -1,4 +1,4 @@
-module github.com/vercel-saleseng/traefik-auth-plugin
+module github.com/vercel-saleseng/traefik-oidc-auth-plugin
 
 go 1.24.4
 
