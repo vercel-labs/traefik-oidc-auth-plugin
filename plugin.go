@@ -21,6 +21,7 @@ const clockSkew = 5 * time.Minute
 type VercelAuth struct {
 	next   http.Handler
 	name   string
+	log    *slog.Logger
 	config *Config
 	jwks   *JWKSCache
 }
@@ -43,17 +44,24 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 }
 
 func newWithClient(ctx context.Context, next http.Handler, config *Config, name string, client *http.Client) (http.Handler, error) {
+	log := slog.
+		New(slog.NewJSONHandler(os.Stdout, nil)).
+		With(
+			slog.String("scope", "VercelAuthPlugin"),
+			slog.String("plugin", name),
+		)
+	log.Info("Initializing Vercel Auth plugin")
+
 	// Validate the config
 	err := config.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("configuration error: %w", err)
 	}
 
-	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
-
 	plugin := &VercelAuth{
 		next:   next,
 		name:   name,
+		log:    log,
 		config: config,
 	}
 
@@ -83,7 +91,8 @@ func (v *VercelAuth) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err := v.validateToken(r.Context(), token)
 	if err != nil {
-		v.unauthorized(w, "Invalid token: "+err.Error())
+		v.log.Warn("Vercel auth token is invalid", slog.Any("error", err))
+		v.unauthorized(w, "Invalid token")
 		return
 	}
 
@@ -140,7 +149,7 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 		jwt.WithIssuedAt(),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to parse token: %w", err)
+		return err
 	} else if !token.Valid {
 		return errors.New("token is not valid")
 	}
