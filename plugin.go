@@ -3,10 +3,11 @@ package traefik_auth_plugin
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -21,8 +22,7 @@ type VercelAuth struct {
 	next   http.Handler
 	name   string
 	config *Config
-	jwks   *JWKS
-	client *http.Client
+	jwks   *JWKSCache
 }
 
 // New creates a new VercelAuth plugin instance.
@@ -49,17 +49,25 @@ func newWithClient(ctx context.Context, next http.Handler, config *Config, name 
 		return nil, fmt.Errorf("configuration error: %w", err)
 	}
 
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
 	plugin := &VercelAuth{
 		next:   next,
 		name:   name,
 		config: config,
-		client: client,
 	}
 
-	// Fetch JWKS on initialization
-	err = plugin.refreshJWKS(ctx)
+	// Init JWKS cache
+	plugin.jwks = &JWKSCache{
+		client:   client,
+		log:      log,
+		endpoint: config.JWKSEndpoint,
+	}
+
+	// Do an initial refresh
+	err = plugin.jwks.Refresh(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch JWKS: %w", err)
+		return nil, fmt.Errorf("failed to fetch JWKS from '%s': %w", config.JWKSEndpoint, err)
 	}
 
 	return plugin, nil
@@ -117,7 +125,7 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 			}
 
 			// Find the corresponding public key in JWKS
-			publicKey, err := v.jwks.GetPublicKey(kid)
+			publicKey, err := v.jwks.GetPublicKey(ctx, kid)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get public key: %w", err)
 			}
@@ -137,28 +145,6 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 		return errors.New("token is not valid")
 	}
 
-	return nil
-}
-
-// refreshJWKS fetches the JWKS from the configured endpoint.
-func (v *VercelAuth) refreshJWKS(ctx context.Context) error {
-	resp, err := v.client.Get(v.config.JWKSEndpoint)
-	if err != nil {
-		return fmt.Errorf("failed to fetch JWKS: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("JWKS endpoint returned status %d", resp.StatusCode)
-	}
-
-	var jwks JWKS
-	err = json.NewDecoder(resp.Body).Decode(&jwks)
-	if err != nil {
-		return fmt.Errorf("failed to decode JWKS: %w", err)
-	}
-
-	v.jwks = &jwks
 	return nil
 }
 
