@@ -4,11 +4,9 @@ import (
 	"context"
 	"crypto/rsa"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"net/http"
 	"strings"
 	"time"
@@ -98,12 +96,11 @@ func (v *VercelAuth) extractToken(h http.Header) string {
 // validateToken validates the JWT token.
 func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) error {
 	if tokenString == "" {
-		return fmt.Errorf("empty token")
+		return fmt.Errorf("token is empty")
 	}
 
 	// Parse the token without validation first to get the header
-	claims := jwt.RegisteredClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, &claims,
+	token, err := jwt.Parse(tokenString,
 		func(token *jwt.Token) (any, error) {
 			// Get the kid from the token header
 			kid, ok := token.Header["kid"].(string)
@@ -128,9 +125,7 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 	)
 	if err != nil {
 		return fmt.Errorf("failed to parse token: %w", err)
-	}
-
-	if !token.Valid {
+	} else if !token.Valid {
 		return errors.New("token is not valid")
 	}
 
@@ -145,35 +140,11 @@ func (v *VercelAuth) getPublicKey(kid string) (*rsa.PublicKey, error) {
 
 	for _, key := range v.jwks.Keys {
 		if key.Kid == kid && key.Kty == "RSA" {
-			return v.jwkToRSAPublicKey(key)
+			return key.ToRSAPublicKey()
 		}
 	}
 
 	return nil, fmt.Errorf("key with kid %s not found", kid)
-}
-
-// jwkToRSAPublicKey converts a JWK to an RSA public key
-func (v *VercelAuth) jwkToRSAPublicKey(jwk JWK) (*rsa.PublicKey, error) {
-	// Decode the modulus
-	nBytes, err := base64.RawURLEncoding.DecodeString(jwk.N)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode modulus: %w", err)
-	}
-
-	// Decode the exponent
-	eBytes, err := base64.RawURLEncoding.DecodeString(jwk.E)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode exponent: %w", err)
-	}
-
-	// Convert to big integers
-	n := new(big.Int).SetBytes(nBytes)
-	e := new(big.Int).SetBytes(eBytes)
-
-	return &rsa.PublicKey{
-		N: n,
-		E: int(e.Int64()),
-	}, nil
 }
 
 // refreshJWKS fetches the JWKS from the configured endpoint.
