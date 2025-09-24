@@ -16,11 +16,6 @@ type JWK struct {
 	E   string `json:"e"`
 }
 
-// JWKS represents a JSON Web Key Set
-type JWKS struct {
-	Keys []JWK `json:"keys"`
-}
-
 // jwkToRSAPublicKey converts a JWK to an RSA public key
 func (jwk JWK) ToRSAPublicKey() (*rsa.PublicKey, error) {
 	nBytes, err := base64.RawURLEncoding.DecodeString(jwk.N)
@@ -39,4 +34,24 @@ func (jwk JWK) ToRSAPublicKey() (*rsa.PublicKey, error) {
 		N: n,
 		E: int(e.Int64()),
 	}, nil
+}
+
+// JWKS represents a JSON Web Key Set
+type JWKS struct {
+	Keys []JWK `json:"keys"`
+}
+
+// GetPublicKey retrieves the public key for a given kid
+func (jwks *JWKS) GetPublicKey(kid string) (*rsa.PublicKey, error) {
+	if jwks == nil {
+		return nil, fmt.Errorf("JWKS not loaded")
+	}
+
+	for _, key := range jwks.Keys {
+		if key.Kid == kid && key.Kty == "RSA" {
+			return key.ToRSAPublicKey()
+		}
+	}
+
+	return nil, fmt.Errorf("key with kid %s not found", kid)
 }

@@ -2,7 +2,6 @@ package traefik_auth_plugin
 
 import (
 	"context"
-	"crypto/rsa"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -28,6 +27,22 @@ type VercelAuth struct {
 
 // New creates a new VercelAuth plugin instance.
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
+	// Init the HTTP client with custom TLS options
+	transport := http.DefaultTransport.(*http.Transport)
+	if transport.TLSClientConfig == nil {
+		transport.TLSClientConfig = &tls.Config{}
+	}
+	transport.TLSClientConfig.MinVersion = tls.VersionTLS12
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	// Return the plugin
+	return newWithClient(ctx, next, config, name, client)
+}
+
+func newWithClient(ctx context.Context, next http.Handler, config *Config, name string, client *http.Client) (http.Handler, error) {
 	// Validate the config
 	err := config.Validate()
 	if err != nil {
@@ -38,14 +53,7 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		next:   next,
 		name:   name,
 		config: config,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					MinVersion: tls.VersionTLS12,
-				},
-			},
-		},
+		client: client,
 	}
 
 	// Fetch JWKS on initialization
@@ -109,7 +117,7 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 			}
 
 			// Find the corresponding public key in JWKS
-			publicKey, err := v.getPublicKey(kid)
+			publicKey, err := v.jwks.GetPublicKey(kid)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get public key: %w", err)
 			}
@@ -130,21 +138,6 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 	}
 
 	return nil
-}
-
-// getPublicKey retrieves the public key for a given kid from JWKS
-func (v *VercelAuth) getPublicKey(kid string) (*rsa.PublicKey, error) {
-	if v.jwks == nil {
-		return nil, fmt.Errorf("JWKS not loaded")
-	}
-
-	for _, key := range v.jwks.Keys {
-		if key.Kid == kid && key.Kty == "RSA" {
-			return key.ToRSAPublicKey()
-		}
-	}
-
-	return nil, fmt.Errorf("key with kid %s not found", kid)
 }
 
 // refreshJWKS fetches the JWKS from the configured endpoint.
