@@ -81,15 +81,14 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 
 		// Best-effort cleanup for stale entries
 		v.tokenCacheMu.Lock()
-		cacheEntry, ok := v.tokenCache[tokenHash]
-		if ok && !now.Before(cacheEntry.expiresAt) {
+		entry, ok = v.tokenCache[tokenHash]
+		if ok && !now.Before(entry.expiresAt) {
 			delete(v.tokenCache, tokenHash)
 		}
 		v.tokenCacheMu.Unlock()
 	}
 
-	claims := &jwt.RegisteredClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims,
+	token, err := jwt.Parse(tokenString,
 		func(token *jwt.Token) (any, error) {
 			// Get the kid from the token header
 			kid, ok := token.Header["kid"].(string)
@@ -137,17 +136,21 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 		return err
 	}
 
-	if claims.ExpiresAt != nil {
-		cacheTTL := claims.ExpiresAt.Sub(now)
-		if cacheTTL > maxValidatedTokenCacheTTL {
-			cacheTTL = maxValidatedTokenCacheTTL
-		}
-		if cacheTTL > 0 {
-			v.tokenCacheMu.Lock()
-			v.tokenCache[tokenHash] = tokenValidationCacheEntry{
-				expiresAt: now.Add(cacheTTL),
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if ok {
+		exp, expErr := claims.GetExpirationTime()
+		if expErr == nil && exp != nil {
+			cacheTTL := exp.Sub(now)
+			if cacheTTL > maxValidatedTokenCacheTTL {
+				cacheTTL = maxValidatedTokenCacheTTL
 			}
-			v.tokenCacheMu.Unlock()
+			if cacheTTL > 0 {
+				v.tokenCacheMu.Lock()
+				v.tokenCache[tokenHash] = tokenValidationCacheEntry{
+					expiresAt: now.Add(cacheTTL),
+				}
+				v.tokenCacheMu.Unlock()
+			}
 		}
 	}
 
