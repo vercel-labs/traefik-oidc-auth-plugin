@@ -17,7 +17,7 @@ Include in your your Traefik's startup configuration (usually `traefik.yaml`) th
 experimental:
   plugins:
     vercel-oidc-auth:
-      moduleName: github.com/vercel-saleseng/traefik-oidc-auth-plugin
+      moduleName: github.com/vercel-labs/traefik-oidc-auth-plugin
       version: v0.1.0
 ```
 
@@ -53,7 +53,7 @@ services:
       - --api.insecure=true
       - --providers.docker=true
       - --entrypoints.web.address=:80
-      - --experimental.plugins.vercel-oidc-auth.modulename=github.com/vercel-saleseng/traefik-oidc-auth-plugin
+      - --experimental.plugins.vercel-oidc-auth.modulename=github.com/vercel-labs/traefik-oidc-auth-plugin
       - --experimental.plugins.vercel-oidc-auth.version=v0.1.0
     ports:
       - "80:80"

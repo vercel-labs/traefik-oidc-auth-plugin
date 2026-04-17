@@ -38,7 +38,7 @@ Set up guide:
    experimental:
      localPlugins:
        vercelAuth:
-         moduleName: github.com/vercel-saleseng/traefik-oidc-auth-plugin
+         moduleName: github.com/vercel-labs/traefik-oidc-auth-plugin
    providers:
      file:
        filename: "dynamic-conf.yaml"
@@ -142,7 +142,7 @@ Set up guide:
    ```sh
    # In the scratch folder
    chmod +x start.sh
-   (mkdir -p plugins-local/src/github.com/vercel-saleseng && cd plugins-local/src/github.com/vercel-saleseng && ln -s ../../../../../ traefik-oidc-auth-plugin)
+   (mkdir -p plugins-local/src/github.com/vercel-labs && cd plugins-local/src/github.com/vercel-labs && ln -s ../../../../../ traefik-oidc-auth-plugin)
    ```
 
 You can then start Traefik and the "whoami" service with:
