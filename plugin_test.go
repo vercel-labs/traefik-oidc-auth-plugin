@@ -570,6 +570,246 @@ func TestVercelAuth_validateToken_ExpiredToken(t *testing.T) {
 	})
 }
 
+func TestPatternMatches(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		value   string
+		want    bool
+	}{
+		{
+			name:    "exact match",
+			pattern: "test-project",
+			value:   "test-project",
+			want:    true,
+		},
+		{
+			name:    "exact mismatch",
+			pattern: "test-project",
+			value:   "other-project",
+			want:    false,
+		},
+		{
+			name:    "full wildcard",
+			pattern: "*",
+			value:   "any-project",
+			want:    true,
+		},
+		{
+			name:    "prefix match",
+			pattern: "test-*",
+			value:   "test-project",
+			want:    true,
+		},
+		{
+			name:    "prefix mismatch",
+			pattern: "test-*",
+			value:   "prod-project",
+			want:    false,
+		},
+		{
+			name:    "alternative first match",
+			pattern: "foo|bar",
+			value:   "foo",
+			want:    true,
+		},
+		{
+			name:    "alternative second match",
+			pattern: "foo|bar",
+			value:   "bar",
+			want:    true,
+		},
+		{
+			name:    "alternative mismatch",
+			pattern: "foo|bar",
+			value:   "baz",
+			want:    false,
+		},
+		{
+			name:    "alternative prefix match",
+			pattern: "fo*|ba*",
+			value:   "basket",
+			want:    true,
+		},
+		{
+			name:    "alternative prefix mismatch",
+			pattern: "fo*|ba*",
+			value:   "qux",
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := patternMatches(tt.pattern, tt.value)
+			if got != tt.want {
+				t.Fatalf("patternMatches(%q, %q) = %v, want %v", tt.pattern, tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConfig_subjectMatches(t *testing.T) {
+	subject := func(teamSlug, projectName, environment string) string {
+		return fmt.Sprintf("owner:%s:project:%s:environment:%s", teamSlug, projectName, environment)
+	}
+
+	config := Config{
+		TeamSlug:    "test-team",
+		ProjectName: "web*|api",
+		Environment: "prod*|preview",
+	}
+
+	tests := []struct {
+		name    string
+		subject string
+		want    bool
+	}{
+		{
+			name:    "project prefix and environment prefix match",
+			subject: subject("test-team", "web-dashboard", "production"),
+			want:    true,
+		},
+		{
+			name:    "project alternative and environment exact match",
+			subject: subject("test-team", "api", "preview"),
+			want:    true,
+		},
+		{
+			name:    "team slug stays exact",
+			subject: subject("test-team-preview", "web-dashboard", "production"),
+			want:    false,
+		},
+		{
+			name:    "project mismatch",
+			subject: subject("test-team", "admin", "production"),
+			want:    false,
+		},
+		{
+			name:    "environment mismatch",
+			subject: subject("test-team", "web-dashboard", "development"),
+			want:    false,
+		},
+		{
+			name:    "malformed subject",
+			subject: "wrong-subject",
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := config.subjectMatches(tt.subject)
+			if got != tt.want {
+				t.Fatalf("subjectMatches(%q) = %v, want %v", tt.subject, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestVercelAuth_validateToken_SubjectPatterns(t *testing.T) {
+	keyPair, err := generateTestKeyPair("test-kid")
+	if err != nil {
+		t.Fatalf("Failed to generate test key pair: %v", err)
+	}
+
+	mockJWKS := newMockJWKSCache()
+	mockJWKS.AddKey(keyPair.kid, keyPair.publicKey)
+
+	subject := func(teamSlug, projectName, environment string) string {
+		return fmt.Sprintf("owner:%s:project:%s:environment:%s", teamSlug, projectName, environment)
+	}
+
+	tests := []struct {
+		name          string
+		projectName   string
+		environment   string
+		tokenProject  string
+		tokenEnv      string
+		shouldSucceed bool
+	}{
+		{
+			name:          "full environment wildcard",
+			projectName:   "test-*",
+			environment:   "*",
+			tokenProject:  "test-project",
+			tokenEnv:      "staging",
+			shouldSucceed: true,
+		},
+		{
+			name:          "exact alternatives",
+			projectName:   "foo|bar",
+			environment:   "production|preview",
+			tokenProject:  "bar",
+			tokenEnv:      "preview",
+			shouldSucceed: true,
+		},
+		{
+			name:          "prefix alternatives",
+			projectName:   "fo*|ba*",
+			environment:   "prod*",
+			tokenProject:  "basket",
+			tokenEnv:      "production",
+			shouldSucceed: true,
+		},
+		{
+			name:          "project pattern mismatch",
+			projectName:   "fo*|ba*",
+			environment:   "prod*",
+			tokenProject:  "qux",
+			tokenEnv:      "production",
+			shouldSucceed: false,
+		},
+		{
+			name:          "environment pattern mismatch",
+			projectName:   "*",
+			environment:   "prod*",
+			tokenProject:  "any-project",
+			tokenEnv:      "development",
+			shouldSucceed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &Config{
+				Issuer:      "https://oidc.vercel.com/test-team",
+				TeamSlug:    "test-team",
+				ProjectName: tt.projectName,
+				Environment: tt.environment,
+			}
+
+			plugin := &VercelAuth{
+				config:     config,
+				jwks:       mockJWKS,
+				tokenCache: make(map[string]tokenValidationCacheEntry),
+			}
+
+			now := time.Now()
+			claims := jwt.RegisteredClaims{
+				Issuer:    config.Issuer,
+				Subject:   subject(config.TeamSlug, tt.tokenProject, tt.tokenEnv),
+				Audience:  []string{config.Audience()},
+				ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+				IssuedAt:  jwt.NewNumericDate(now),
+			}
+
+			tokenString, err := keyPair.generateToken(claims)
+			if err != nil {
+				t.Fatalf("Failed to generate token: %v", err)
+			}
+
+			err = plugin.validateToken(t.Context(), tokenString)
+			if tt.shouldSucceed && err != nil {
+				t.Fatalf("Expected validation to succeed, got error: %v", err)
+			}
+			if !tt.shouldSucceed && err == nil {
+				t.Fatal("Expected validation to fail, got nil")
+			}
+		})
+	}
+}
+
 func TestVercelAuth_validateToken_Cache(t *testing.T) {
 	keyPair, err := generateTestKeyPair("test-kid")
 	if err != nil {

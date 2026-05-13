@@ -106,7 +106,6 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 		},
 		jwt.WithAudience(v.config.Audience()),
 		jwt.WithIssuer(v.config.Issuer),
-		jwt.WithSubject(v.config.Subject()),
 		jwt.WithLeeway(clockSkew),
 		jwt.WithExpirationRequired(),
 		jwt.WithIssuedAt(),
@@ -121,6 +120,7 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 			}
 			v.tokenCacheMu.Unlock()
 		}
+
 		return err
 	} else if !token.Valid {
 		err = errors.New("token is not valid")
@@ -136,21 +136,44 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 		return err
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if ok {
-		exp, expErr := claims.GetExpirationTime()
-		if expErr == nil && exp != nil {
-			cacheTTL := exp.Sub(now)
-			if cacheTTL > maxValidatedTokenCacheTTL {
-				cacheTTL = maxValidatedTokenCacheTTL
+	subject, err := token.Claims.GetSubject()
+	if err != nil {
+		err = fmt.Errorf("token subject claim is invalid: %w", err)
+		v.tokenCacheMu.Lock()
+		v.tokenCache[tokenHash] = tokenValidationCacheEntry{
+			expiresAt:  now.Add(maxValidatedTokenCacheTTL),
+			errMessage: err,
+		}
+		v.tokenCacheMu.Unlock()
+
+		return err
+	}
+
+	if !v.config.subjectMatches(subject) {
+		err = errors.New("token has invalid subject")
+		v.tokenCacheMu.Lock()
+		v.tokenCache[tokenHash] = tokenValidationCacheEntry{
+			expiresAt:  now.Add(maxValidatedTokenCacheTTL),
+			errMessage: err,
+		}
+		v.tokenCacheMu.Unlock()
+
+		return err
+	}
+
+	exp, expErr := token.Claims.GetExpirationTime()
+	if expErr == nil && exp != nil {
+		// Note: min isn't available in Yaegi
+		cacheTTL := exp.Sub(now)
+		if maxValidatedTokenCacheTTL < cacheTTL {
+			cacheTTL = maxValidatedTokenCacheTTL
+		}
+		if cacheTTL > 0 {
+			v.tokenCacheMu.Lock()
+			v.tokenCache[tokenHash] = tokenValidationCacheEntry{
+				expiresAt: now.Add(cacheTTL),
 			}
-			if cacheTTL > 0 {
-				v.tokenCacheMu.Lock()
-				v.tokenCache[tokenHash] = tokenValidationCacheEntry{
-					expiresAt: now.Add(cacheTTL),
-				}
-				v.tokenCacheMu.Unlock()
-			}
+			v.tokenCacheMu.Unlock()
 		}
 	}
 

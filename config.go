@@ -65,8 +65,62 @@ func (c Config) Audience() string {
 	return "https://vercel.com/" + c.TeamSlug
 }
 
-// Subject returns the expected sub claim value
+// Subject returns the configured sub claim value or pattern.
 func (c Config) Subject() string {
 	// owner:[TEAM_SLUG]:project:[PROJECT_NAME]:environment:[ENVIRONMENT]
 	return "owner:" + c.TeamSlug + ":project:" + c.ProjectName + ":environment:" + c.Environment
+}
+
+func (c Config) subjectMatches(subject string) bool {
+	teamSlug, projectName, environment, ok := parseSubject(subject)
+	if !ok {
+		return false
+	}
+
+	return teamSlug == c.TeamSlug &&
+		patternMatches(c.ProjectName, projectName) &&
+		patternMatches(c.Environment, environment)
+}
+
+func parseSubject(subject string) (teamSlug string, projectName string, environment string, ok bool) {
+	const ownerPrefix = "owner:"
+
+	remaining, ok := strings.CutPrefix(subject, ownerPrefix)
+	if !ok {
+		return "", "", "", false
+	}
+
+	teamSlug, remaining, ok = strings.Cut(remaining, ":project:")
+	if !ok {
+		return "", "", "", false
+	}
+
+	projectName, environment, ok = strings.Cut(remaining, ":environment:")
+	if !ok {
+		return "", "", "", false
+	}
+
+	return teamSlug, projectName, environment, true
+}
+
+func patternMatches(pattern string, value string) bool {
+	// Note that strings.SplitSeq isn't available in Yaegi
+	for _, alternative := range strings.Split(pattern, "|") {
+		// Wildcard matches everything
+		if alternative == "*" {
+			return true
+		}
+
+		// Match prefix
+		if strings.HasSuffix(alternative, "*") && strings.HasPrefix(value, alternative[:len(alternative)-1]) {
+			return true
+		}
+
+		// Exact match
+		if value == alternative {
+			return true
+		}
+	}
+
+	return false
 }

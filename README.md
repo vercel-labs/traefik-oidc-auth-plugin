@@ -18,7 +18,7 @@ experimental:
   plugins:
     vercel-oidc-auth:
       moduleName: github.com/vercel-labs/traefik-oidc-auth-plugin
-      version: v0.3.0
+      version: v0.4.0
 ```
 
 ### Define the middleware
@@ -48,13 +48,13 @@ http:
 version: '3.7'
 services:
   traefik:
-    image: traefik:v3.5
+    image: traefik:v3.6
     command:
       - --api.insecure=true
       - --providers.docker=true
       - --entrypoints.web.address=:80
       - --experimental.plugins.vercel-oidc-auth.modulename=github.com/vercel-labs/traefik-oidc-auth-plugin
-      - --experimental.plugins.vercel-oidc-auth.version=v0.3.0
+      - --experimental.plugins.vercel-oidc-auth.version=v0.4.0
     ports:
       - "80:80"
       - "8080:8080"
@@ -79,10 +79,23 @@ services:
 |-----------|----------|---------|-------------|
 | `issuer` | ✓ | - | JWT issuer URL. Use `https://oidc.vercel.com` for global or `https://oidc.vercel.com/team-name` for team-specific |
 | `teamSlug` | ✓ | - | Your Vercel team slug |
-| `projectName` | ✓ | - | The name of your Vercel project |
-| `environment` | ✓ | - | Environment name (e.g., "production", "preview") |
+| `projectName` | ✓ | - | The name of your Vercel project. Supports the matching patterns below |
+| `environment` | ✓ | - | Environment name (e.g., "production", "preview"). Supports the matching patterns below |
 | `tokenHeader` | - | "Authorization" | HTTP header containing the JWT token |
 | `jwksEndpoint` | - | `{issuer}/.well-known/jwks` | JWKS endpoint URL for key retrieval |
+
+## Project and Environment Matching
+
+`projectName` and `environment` are exact matches by default, but they also support simple matching patterns:
+
+| Pattern | Behavior | Example |
+|---------|----------|---------|
+| `*` | Matches any project or environment | `environment: "*"` |
+| `foo*` | Matches values that start with `foo` | `projectName: "docs-*"` |
+| <code>foo&#124;bar</code> | Matches either `foo` or `bar` | <code>environment: "production&#124;preview"</code> |
+| <code>fo*&#124;ba*</code> | Combines alternatives with prefix matching | <code>projectName: "web-*&#124;api-*"</code> |
+
+These patterns only apply to `projectName` and `environment`. `teamSlug` must always match exactly.
 
 ## Usage with Vercel
 
