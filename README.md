@@ -80,7 +80,7 @@ services:
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `issuer` | ✓ | - | JWT issuer URL. Use `https://oidc.vercel.com` for global or `https://oidc.vercel.com/team-name` for team-specific |
+| `issuer` | - | `https://oidc.vercel.com/{teamSlug}` | JWT issuer URL. Use `https://oidc.vercel.com` (or the alias `global`) for global, or `https://oidc.vercel.com/{teamSlug}` (or the alias `team`) for team-specific. Defaults to the team issuer |
 | `teamSlug` | ✓ | - | Your Vercel team slug |
 | `projectName` | ✓ | - | The name of your Vercel project. Supports the matching patterns below |
 | `environment` | ✓ | - | Environment name (e.g., "production", "preview"). Supports the matching patterns below |

@@ -3,7 +3,6 @@ type: middleware
 import: github.com/vercel-labs/traefik-oidc-auth-plugin
 summary: Vercel OIDC Plugin for Traefik
 testData:
-  issuer: https://oidc.vercel.com
   teamSlug: your-team
   projectName: your-project
   environment: production

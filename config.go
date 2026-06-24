@@ -7,10 +7,11 @@ import (
 
 // Config holds the plugin configuration.
 type Config struct {
-	// JWT issuer (required)
-	// - "https://oidc.vercel.com" (global issuer mode)
-	// - "https://oidc.vercel.com/team-name" (team issuer mode)
-	Issuer string `json:"issuer"`
+	// JWT issuer (optional)
+	// - "https://oidc.vercel.com" or "global" (global issuer mode)
+	// - "https://oidc.vercel.com/team-name" or "team" (team issuer mode)
+	// If unset, defaults to the team issuer "https://oidc.vercel.com/[TEAM_SLUG]".
+	Issuer string `json:"issuer,omitempty"`
 	// Vercel team slug (required)
 	TeamSlug string `json:"teamSlug"`
 	// Vercel project name (required)
@@ -39,13 +40,7 @@ func CreateConfig() *Config {
 
 // Validate the configuration
 func (c *Config) Validate() error {
-	// Validate the issuer and trim the ending slash if present
-	if c.Issuer == "" {
-		return errors.New("property issuer is required")
-	}
-	c.Issuer = strings.TrimRight(c.Issuer, "/")
-
-	// Enforce other required fields
+	// Enforce required fields
 	if c.TeamSlug == "" {
 		return errors.New("property teamSlug is required")
 	}
@@ -56,9 +51,18 @@ func (c *Config) Validate() error {
 		return errors.New("property environment is required")
 	}
 
+	// Resolve the issuer, including aliases and the default.
+	// This depends on teamSlug, so it must run after that is validated.
+	switch c.Issuer {
+	case "global":
+		c.Issuer = "https://oidc.vercel.com"
+	case "", "team":
+		c.Issuer = "https://oidc.vercel.com/" + c.TeamSlug
+	}
+
 	// Set default JWKS endpoint if not provided
 	if c.JWKSEndpoint == "" {
-		c.JWKSEndpoint = c.Issuer + "/.well-known/jwks"
+		c.JWKSEndpoint = strings.TrimSuffix(c.Issuer, "/") + "/.well-known/jwks"
 	}
 
 	return nil

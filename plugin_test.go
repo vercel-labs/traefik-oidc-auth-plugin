@@ -444,12 +444,12 @@ func TestVercelAuth_validateToken_ExpiredToken(t *testing.T) {
 
 	t.Run("Custom audience", func(t *testing.T) {
 		customConfig := &Config{
-			Issuer:         config.Issuer,
-			TeamSlug:       config.TeamSlug,
-			ProjectName:    config.ProjectName,
-			Environment:    config.Environment,
-			TokenHeader:    config.TokenHeader,
-			Audience: "sts.amazonaws.com",
+			Issuer:      config.Issuer,
+			TeamSlug:    config.TeamSlug,
+			ProjectName: config.ProjectName,
+			Environment: config.Environment,
+			TokenHeader: config.TokenHeader,
+			Audience:    "sts.amazonaws.com",
 		}
 
 		plugin := &VercelAuth{
@@ -722,6 +722,44 @@ func TestConfig_Audience(t *testing.T) {
 			t.Error("Expected HasCustomAudience to be true")
 		}
 	})
+}
+
+func TestConfig_Validate_Issuer(t *testing.T) {
+	newConfig := func(issuer string) *Config {
+		return &Config{
+			Issuer:      issuer,
+			TeamSlug:    "test-team",
+			ProjectName: "test-project",
+			Environment: "production",
+		}
+	}
+
+	tests := []struct {
+		name       string
+		issuer     string
+		wantIssuer string
+	}{
+		{"unset defaults to team issuer", "", "https://oidc.vercel.com/test-team"},
+		{"global alias", "global", "https://oidc.vercel.com"},
+		{"team alias", "team", "https://oidc.vercel.com/test-team"},
+		{"explicit issuer", "https://oidc.vercel.com/other", "https://oidc.vercel.com/other"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := newConfig(tt.issuer)
+			if err := config.Validate(); err != nil {
+				t.Fatalf("Validate() returned error: %v", err)
+			}
+			if config.Issuer != tt.wantIssuer {
+				t.Errorf("Expected issuer %q, got %q", tt.wantIssuer, config.Issuer)
+			}
+			wantJWKS := tt.wantIssuer + "/.well-known/jwks"
+			if config.JWKSEndpoint != wantJWKS {
+				t.Errorf("Expected JWKS endpoint %q, got %q", wantJWKS, config.JWKSEndpoint)
+			}
+		})
+	}
 }
 
 func TestConfig_subjectMatches(t *testing.T) {
