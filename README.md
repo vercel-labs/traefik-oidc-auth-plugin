@@ -18,7 +18,7 @@ experimental:
   plugins:
     vercel-oidc-auth:
       moduleName: github.com/vercel-labs/traefik-oidc-auth-plugin
-      version: v0.4.0
+      version: v0.5.0
 ```
 
 ### Define the middleware
@@ -57,7 +57,7 @@ services:
       - --providers.docker=true
       - --entrypoints.web.address=:80
       - --experimental.plugins.vercel-oidc-auth.modulename=github.com/vercel-labs/traefik-oidc-auth-plugin
-      - --experimental.plugins.vercel-oidc-auth.version=v0.4.0
+      - --experimental.plugins.vercel-oidc-auth.version=v0.5.0
     ports:
       - "80:80"
       - "8080:8080"
