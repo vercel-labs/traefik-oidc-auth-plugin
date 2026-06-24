@@ -17,6 +17,11 @@ type Config struct {
 	ProjectName string `json:"projectName"`
 	// Environment name, e.g. "production" or "preview" (required)
 	Environment string `json:"environment"`
+	// Custom audience expected in the token's "aud" claim (optional)
+	// If unset, defaults to "https://vercel.com/[TEAM_SLUG]".
+	// Using a custom audience is recommended for security reasons
+	// See also: https://vercel.com/changelog/custom-oidc-token-audiences
+	Audience string `json:"audience,omitempty"`
 	// Name of the header containing the token, e.g. "Authorization" or "X-Vercel-Oidc-Token"
 	// Defaults to "Authorization"
 	TokenHeader string `json:"tokenHeader,omitempty"`
@@ -59,10 +64,20 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Audience returns the expected aud claim value
-func (c Config) Audience() string {
-	// https://vercel.com/[TEAM_SLUG]
-	return "https://vercel.com/" + c.TeamSlug
+// TokenAudience returns the expected aud claim value.
+// If a custom audience is not configure the default "https://vercel.com/[TEAM_SLUG]" is returned.
+func (c Config) TokenAudience() string {
+	if c.Audience == "" {
+		// https://vercel.com/[TEAM_SLUG]
+		return "https://vercel.com/" + c.TeamSlug
+	}
+
+	return c.Audience
+}
+
+// HasCustomAudience reports whether a custom audience has been configured.
+func (c Config) HasCustomAudience() bool {
+	return c.Audience != ""
 }
 
 // Subject returns the configured sub claim value or pattern.

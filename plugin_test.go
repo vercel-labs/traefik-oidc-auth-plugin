@@ -140,7 +140,7 @@ func TestVercelAuth_ServeHTTP(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   config.Subject(),
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		}
@@ -254,7 +254,7 @@ func TestVercelAuth_ServeHTTP(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   config.Subject(),
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now.Add(2 * time.Minute)), // 2 minutes in future
 		}
@@ -296,7 +296,7 @@ func TestVercelAuth_ServeHTTP(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   config.Subject(),
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		}
@@ -368,7 +368,7 @@ func TestVercelAuth_validateToken_ExpiredToken(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   config.Subject(),
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(-time.Hour)), // Expired 1 hour ago
 			IssuedAt:  jwt.NewNumericDate(now.Add(-2 * time.Hour)),
 		}
@@ -399,7 +399,7 @@ func TestVercelAuth_validateToken_ExpiredToken(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    "https://wrong-issuer.com", // Wrong issuer
 			Subject:   config.Subject(),
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		}
@@ -442,6 +442,57 @@ func TestVercelAuth_validateToken_ExpiredToken(t *testing.T) {
 		}
 	})
 
+	t.Run("Custom audience", func(t *testing.T) {
+		customConfig := &Config{
+			Issuer:         config.Issuer,
+			TeamSlug:       config.TeamSlug,
+			ProjectName:    config.ProjectName,
+			Environment:    config.Environment,
+			TokenHeader:    config.TokenHeader,
+			Audience: "sts.amazonaws.com",
+		}
+
+		plugin := &VercelAuth{
+			config:     customConfig,
+			jwks:       mockJWKS,
+			tokenCache: make(map[string]tokenValidationCacheEntry),
+		}
+
+		now := time.Now()
+
+		// A token carrying the custom audience is accepted
+		validClaims := jwt.RegisteredClaims{
+			Issuer:    customConfig.Issuer,
+			Subject:   customConfig.Subject(),
+			Audience:  []string{customConfig.TokenAudience()},
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now),
+		}
+		validToken, err := keyPair.generateToken(validClaims)
+		if err != nil {
+			t.Fatalf("Failed to generate token: %v", err)
+		}
+		if err = plugin.validateToken(t.Context(), validToken); err != nil {
+			t.Errorf("Expected custom audience token to be valid, got: %v", err)
+		}
+
+		// A token carrying the default audience is rejected
+		defaultClaims := jwt.RegisteredClaims{
+			Issuer:    customConfig.Issuer,
+			Subject:   customConfig.Subject(),
+			Audience:  []string{"https://vercel.com/" + customConfig.TeamSlug},
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now),
+		}
+		defaultToken, err := keyPair.generateToken(defaultClaims)
+		if err != nil {
+			t.Fatalf("Failed to generate token: %v", err)
+		}
+		if err = plugin.validateToken(t.Context(), defaultToken); err == nil {
+			t.Error("Expected default audience token to be rejected when a custom audience is configured, got nil")
+		}
+	})
+
 	t.Run("Wrong subject", func(t *testing.T) {
 		plugin := &VercelAuth{
 			config:     config,
@@ -453,7 +504,7 @@ func TestVercelAuth_validateToken_ExpiredToken(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   "wrong-subject", // Wrong subject
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		}
@@ -480,7 +531,7 @@ func TestVercelAuth_validateToken_ExpiredToken(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   config.Subject(),
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		}
@@ -514,7 +565,7 @@ func TestVercelAuth_validateToken_ExpiredToken(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   config.Subject(),
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		}
@@ -549,7 +600,7 @@ func TestVercelAuth_validateToken_ExpiredToken(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   config.Subject(),
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		}
@@ -647,6 +698,30 @@ func TestPatternMatches(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfig_Audience(t *testing.T) {
+	t.Run("default audience", func(t *testing.T) {
+		config := Config{TeamSlug: "test-team"}
+
+		if got := config.TokenAudience(); got != "https://vercel.com/test-team" {
+			t.Errorf("Expected default audience, got %q", got)
+		}
+		if config.HasCustomAudience() {
+			t.Error("Expected HasCustomAudience to be false")
+		}
+	})
+
+	t.Run("custom audience", func(t *testing.T) {
+		config := Config{TeamSlug: "test-team", Audience: "sts.amazonaws.com"}
+
+		if got := config.TokenAudience(); got != "sts.amazonaws.com" {
+			t.Errorf("Expected custom audience, got %q", got)
+		}
+		if !config.HasCustomAudience() {
+			t.Error("Expected HasCustomAudience to be true")
+		}
+	})
 }
 
 func TestConfig_subjectMatches(t *testing.T) {
@@ -789,7 +864,7 @@ func TestVercelAuth_validateToken_SubjectPatterns(t *testing.T) {
 			claims := jwt.RegisteredClaims{
 				Issuer:    config.Issuer,
 				Subject:   subject(config.TeamSlug, tt.tokenProject, tt.tokenEnv),
-				Audience:  []string{config.Audience()},
+				Audience:  []string{config.TokenAudience()},
 				ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 				IssuedAt:  jwt.NewNumericDate(now),
 			}
@@ -830,7 +905,7 @@ func TestVercelAuth_validateToken_Cache(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   config.Subject(),
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		}
@@ -984,7 +1059,7 @@ func TestVercelAuth_validateToken_Cache(t *testing.T) {
 		claims := jwt.RegisteredClaims{
 			Issuer:    config.Issuer,
 			Subject:   "wrong-subject",
-			Audience:  []string{config.Audience()},
+			Audience:  []string{config.TokenAudience()},
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		}

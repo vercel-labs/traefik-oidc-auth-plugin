@@ -60,6 +60,14 @@ func newWithClient(ctx context.Context, next http.Handler, config *Config, name 
 		return nil, fmt.Errorf("configuration error: %w", err)
 	}
 
+	// Warn when not using a custom audience
+	if !config.HasCustomAudience() {
+		log.Warn(
+			"No custom audience configured; using the default audience. Configuring a custom audience is recommended for security reasons to prevent token replay attacks. See https://vercel.com/changelog/custom-oidc-token-audiences",
+			slog.String("audience", config.TokenAudience()),
+		)
+	}
+
 	plugin := &VercelAuth{
 		next:       next,
 		name:       name,

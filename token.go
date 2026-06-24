@@ -104,7 +104,7 @@ func (v *VercelAuth) validateToken(ctx context.Context, tokenString string) erro
 
 			return publicKey, nil
 		},
-		jwt.WithAudience(v.config.Audience()),
+		jwt.WithAudience(v.config.TokenAudience()),
 		jwt.WithIssuer(v.config.Issuer),
 		jwt.WithLeeway(clockSkew),
 		jwt.WithExpirationRequired(),

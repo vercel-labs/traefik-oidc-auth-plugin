@@ -38,6 +38,9 @@ http:
           teamSlug: "your-team"
           projectName: "your-project"
           environment: "production"
+          # Optional but recommended: custom audience expected in the token
+          # If unset, defaults to "https://vercel.com/your-team"
+          # audience: "https://your-service.example.com"
           # Optional, defaults to "Authorization"
           # tokenHeader: "Authorization"
 ```
@@ -81,8 +84,17 @@ services:
 | `teamSlug` | ✓ | - | Your Vercel team slug |
 | `projectName` | ✓ | - | The name of your Vercel project. Supports the matching patterns below |
 | `environment` | ✓ | - | Environment name (e.g., "production", "preview"). Supports the matching patterns below |
+| `audience` | - | `https://vercel.com/{teamSlug}` | Custom audience expected in the token's `aud` claim. See [Custom audiences](#custom-audiences) |
 | `tokenHeader` | - | "Authorization" | HTTP header containing the JWT token |
 | `jwksEndpoint` | - | `{issuer}/.well-known/jwks` | JWKS endpoint URL for key retrieval |
+
+## Custom audiences
+
+By default, Vercel OIDC tokens use a fixed audience of `https://vercel.com/{teamSlug}`, and this plugin validates against that value when `audience` is not set.
+
+You can instead issue tokens with a [custom audience](https://vercel.com/changelog/custom-oidc-token-audiences) scoped to a specific downstream service. Setting the `audience` parameter makes the plugin require that exact value in the token's `aud` claim.
+
+Using a custom audience is **recommended for security reasons**: it prevents token replay attacks, since a token minted for one service cannot be replayed against another.
 
 ## Project and Environment Matching
 
